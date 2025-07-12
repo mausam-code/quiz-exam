@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PSC Exam Platform – Staff Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body{padding-top:4.5rem}
+    .pointer{cursor:pointer}
+  </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+  <div class="container-fluid">
+    <a class="navbar-brand pointer" id="nav-dashboard">PSC Platform</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainnav"><span class="navbar-toggler-icon"></span></button>
+    <div class="collapse navbar-collapse" id="mainnav">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item"><a class="nav-link pointer" id="nav-dashboard">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link pointer" id="nav-users">Users</a></li>
+        <li class="nav-item"><a class="nav-link pointer" id="nav-stats">Statistics</a></li>
+      </ul>
+      <button class="btn btn-outline-light btn-sm" id="btn-logout">Logout</button>
+    </div>
+  </div>
+</nav>
+
+<div class="container" id="content"></div>
+
+<!-- Login modal -->
+<div class="modal" tabindex="-1" id="loginModal">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" id="loginForm">
+      <div class="modal-header"><h5 class="modal-title">Staff Login</h5></div>
+      <div class="modal-body">
+        <input class="form-control mb-2" placeholder="Username" id="loginUser" required autocomplete="username">
+        <input class="form-control" type="password" placeholder="Password" id="loginPass" required autocomplete="current-password">
+        <div id="loginError" class="text-danger small mt-2"></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-primary w-100">Login</button></div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const API_BASE = "/api/auth/";
+const modal    = new bootstrap.Modal(document.querySelector("#loginModal"));
+const content  = document.querySelector("#content");
+let   token    = localStorage.getItem("access");  // only access token
+
+/* authFetch with Bearer token */
+function authFetch(url, opts={}) {
+  opts.headers = opts.headers || {};
+  if(token) opts.headers["Authorization"] = `Bearer ${token}`;
+  return fetch(url, opts).then(r=>{
+    if(r.status===401){ showLogin(); throw new Error("Unauthorized"); }
+    return r;
+  });
+}
+
+/* Show login modal */
+function showLogin(){ modal.show(); }
+
+/* Login form submit */
+document.querySelector("#loginForm").addEventListener("submit", e => {
+  e.preventDefault();
+  fetch(API_BASE+"login/", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      username: document.querySelector("#loginUser").value,
+      password: document.querySelector("#loginPass").value
+    })
+  })
+  .then(r=>r.json())
+  .then(data=>{
+    if(data.tokens && data.tokens.access){
+      token = data.tokens.access;
+      localStorage.setItem("access", token);
+      modal.hide();
+      loadDashboard();
+    } else {
+      document.querySelector("#loginError").innerText = "Invalid username or password";
+    }
+  })
+  .catch(()=>document.querySelector("#loginError").innerText="Server error");
+});
+
+/* Logout */
+document.getElementById("btn-logout").onclick = ()=>{
+  localStorage.removeItem("access");
+  token = null;
+  showLogin();
+};
+
+/* Nav listeners */
+document.querySelector("#nav-dashboard").onclick = loadDashboard;
+document.querySelector("#nav-users").onclick     = loadUsers;
+document.querySelector("#nav-stats").onclick     = loadStats;
+
+/* Dashboard example */
+function loadDashboard(){
+  content.innerHTML = `
+    <h3 class="mb-3">Dashboard</h3>
+    <p>Welcome to the PSC Exam Staff Dashboard.</p>
+    <p>Here you can manage users, view statistics, and handle exam content.</p>`;
+}
+
+/* Example: load users list */
+function loadUsers(){
+  authFetch(API_BASE+"profile/").then(r=>r.json()).then(profile=>{
+    content.innerHTML = `
+      <h3 class="mb-3">My Profile</h3>
+      <ul>
+        <li>Username: ${profile.username}</li>
+        <li>Email: ${profile.email}</li>
+        <li>Role: ${profile.role || "N/A"}</li>
+      </ul>`;
+  });
+}
+
+/* Example: load statistics */
+function loadStats(){
+  authFetch(API_BASE+"stats/").then(r=>r.json()).then(stats=>{
+    content.innerHTML = `
+      <h3 class="mb-3">User Statistics</h3>
+      <p>Total Exams Taken: ${stats.total_exams}</p>
+      <p>Average Score: ${stats.average_score || "N/A"}</p>`;
+  });
+}
+
+/* init */
+if(!token){ showLogin(); } else { loadDashboard(); }
+</script>
+</body>
+</html>
